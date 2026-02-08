@@ -2,24 +2,32 @@ import random
 import string
 import time
 import re
+import os
+from anthropic import Anthropic
+from dotenv import load_dotenv
+
+# .envファイルから環境変数を読み込む
+load_dotenv()
 
 
 def generate_random_identifier(length=8):
     """ランダムな識別子を生成"""
     first_char = random.choice(string.ascii_lowercase)
-    rest_chars = ''.join(random.choices(string.ascii_lowercase + string.digits + '_', k=length-1))
+    rest_chars = "".join(
+        random.choices(string.ascii_lowercase + string.digits + "_", k=length - 1)
+    )
     return first_char + rest_chars
 
 
 def generate_random_value():
     """ランダムな値を生成"""
-    value_type = random.choice(['int', 'str', 'bool', 'list'])
-    if value_type == 'int':
+    value_type = random.choice(["int", "str", "bool", "list"])
+    if value_type == "int":
         return random.randint(0, 1000)
-    elif value_type == 'str':
+    elif value_type == "str":
         return f'"{generate_random_identifier(5)}"'
-    elif value_type == 'bool':
-        return random.choice(['True', 'False'])
+    elif value_type == "bool":
+        return random.choice(["True", "False"])
     else:
         return f'[{", ".join(str(random.randint(0, 100)) for _ in range(random.randint(1, 5)))}]'
 
@@ -87,23 +95,24 @@ def generate_code(num_functions=3, num_classes=2):
 def fix_division_by_zero(code):
     """ゼロ除算エラーを修正"""
     import re
+
     # // 0 や % 0 を // 1 や % 1 に置き換え
-    code = re.sub(r'//\s*0\b', '// 1', code)
-    code = re.sub(r'%\s*0\b', '% 1', code)
-    code = re.sub(r'/\s*0\b', '/ 1', code)
+    code = re.sub(r"//\s*0\b", "// 1", code)
+    code = re.sub(r"%\s*0\b", "% 1", code)
+    code = re.sub(r"/\s*0\b", "/ 1", code)
     return code
 
 
 def fix_syntax_error(code):
     """簡単な構文エラーを修正"""
-    lines = code.split('\n')
+    lines = code.split("\n")
     fixed_lines = []
 
     for i, line in enumerate(lines):
         fixed_lines.append(line)
 
         # コロンで終わる行（関数定義、クラス定義、if/for文など）
-        if line.strip().endswith(':'):
+        if line.strip().endswith(":"):
             # 現在の行のインデントレベルを取得
             current_indent = len(line) - len(line.lstrip())
 
@@ -111,17 +120,175 @@ def fix_syntax_error(code):
             if i + 1 < len(lines):
                 next_line = lines[i + 1]
                 # 次の行が空行または適切にインデントされていない場合
-                if not next_line.strip() or len(next_line) - len(next_line.lstrip()) <= current_indent:
+                if (
+                    not next_line.strip()
+                    or len(next_line) - len(next_line.lstrip()) <= current_indent
+                ):
                     # 適切なインデントでpassを追加
-                    fixed_lines.append(' ' * (current_indent + 4) + 'pass')
+                    fixed_lines.append(" " * (current_indent + 4) + "pass")
             else:
                 # 最後の行の場合、passを追加
-                fixed_lines.append(' ' * (current_indent + 4) + 'pass')
+                fixed_lines.append(" " * (current_indent + 4) + "pass")
 
-    return '\n'.join(fixed_lines)
+    return "\n".join(fixed_lines)
 
 
-def execute_generated_code(code, max_retries=3):
+def evaluate_code_with_llm(original_code, improved_code):
+    """LLMを使って元のコードと改善されたコードを評価"""
+    print("\n" + "=" * 60)
+    print("LLMを使ってコードを評価しています...")
+    print("=" * 60)
+
+    try:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            print("警告: ANTHROPIC_API_KEY が設定されていません")
+            return None
+
+        client = Anthropic(api_key=api_key)
+
+        prompt = f"""以下の2つのPythonコードを比較評価してください。
+
+# 元のコード（ランダム生成）
+```python
+{original_code}
+```
+
+# 改善されたコード
+```python
+{improved_code}
+```
+
+# 評価基準
+1. **実用性** (1-10点): 実際に役立つ機能を持っているか
+2. **可読性** (1-10点): コードが読みやすく理解しやすいか
+3. **保守性** (1-10点): 変更や拡張がしやすいか
+4. **創造性** (1-10点): 元のランダムコードから創造的な変換がされているか
+
+# 出力形式
+以下の形式で評価を出力してください：
+
+## 評価スコア
+- 実用性: [元: X点 → 改善: Y点] ([改善/維持/低下])
+- 可読性: [元: X点 → 改善: Y点] ([改善/維持/低下])
+- 保守性: [元: X点 → 改善: Y点] ([改善/維持/低下])
+- 創造性: [元: X点 → 改善: Y点] ([改善/維持/低下])
+- **総合**: [元: XX点 → 改善: YY点]
+
+## 主な改善点
+- [改善点1]
+- [改善点2]
+- [改善点3]
+
+## 推奨事項
+[このコードが実用的かどうか、さらに改善の余地があるか]"""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        evaluation = message.content[0].text
+
+        print("\n" + "=" * 60)
+        print("📊 評価結果:")
+        print("=" * 60)
+        print(evaluation)
+        print("=" * 60)
+
+        return evaluation
+
+    except Exception as e:
+        print(f"LLMでの評価中にエラーが発生しました: {e}")
+        return None
+
+
+def improve_code_with_llm(code):
+    """LLMを使ってランダムなコードを意味のあるコードに改善"""
+    print("\n" + "=" * 60)
+    print("LLMを使ってコードを改善しています...")
+    print("=" * 60)
+
+    try:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            print("警告: ANTHROPIC_API_KEY が設定されていません")
+            print("元のコードをそのまま返します")
+            return code
+
+        client = Anthropic(api_key=api_key)
+
+        prompt = f"""以下のランダムに生成されたPythonコードを、意味のある実用的なコードに改善してください。
+
+元のコード:
+```python
+{code}
+```
+
+要件:
+1. 元のコードの構造（関数名、クラス名）をできるだけ活かす
+2. 実際に役立つ機能を持つコードにする
+3. コメントやdocstringを充実させる
+4. エラーが出ないようにする
+
+以下の形式で出力してください：
+
+## 改善点
+[改善点の箇条書き]
+
+## 改善されたコード
+```python
+[改善されたPythonコード]
+```"""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        response_text = message.content[0].text
+
+        # 改善点とコードを分離
+        improvements = ""
+        improved_code = ""
+
+        if "## 改善点" in response_text and "## 改善されたコード" in response_text:
+            parts = response_text.split("## 改善されたコード")
+            improvements = parts[0].replace("## 改善点", "").strip()
+            code_part = parts[1].strip()
+            # コードブロックのマーカーを削除
+            improved_code = (
+                code_part.replace("```python", "").replace("```", "").strip()
+            )
+        else:
+            # フォーマットが期待通りでない場合は全体をコードとして扱う
+            improved_code = (
+                response_text.replace("```python", "").replace("```", "").strip()
+            )
+
+        # 改善点を表示
+        if improvements:
+            print("\n" + "=" * 60)
+            print("📝 改善点:")
+            print("=" * 60)
+            print(improvements)
+            print("=" * 60)
+
+        print("\n改善されたコード:")
+        print(improved_code)
+        print("\n" + "=" * 60)
+
+        return improved_code
+
+    except Exception as e:
+        print(f"LLMでの改善中にエラーが発生しました: {e}")
+        print("元のコードをそのまま返します")
+        return code
+
+
+def execute_generated_code(code, max_retries=5):
     """生成されたコードを実行（エラー時は修正して再実行）"""
     print("=" * 60)
     print("生成されたコードを実行します...")
@@ -155,7 +322,9 @@ def execute_generated_code(code, max_retries=3):
             print("\n")
         except Exception as e:
             retry_count += 1
-            print(f"\n[エラー {retry_count}/{max_retries}] 実行エラー: {type(e).__name__}: {e}")
+            print(
+                f"\n[エラー {retry_count}/{max_retries}] 実行エラー: {type(e).__name__}: {e}"
+            )
             if retry_count < max_retries:
                 print("別のコードを生成して再試行します...")
                 current_code = generate_code()
@@ -199,12 +368,12 @@ class Individual:
             score += 20  # その他のエラーは少し部分点
 
         # コードの複雑さ（関数とクラスの数）
-        num_functions = self.code.count('def ')
-        num_classes = self.code.count('class ')
+        num_functions = self.code.count("def ")
+        num_classes = self.code.count("class ")
         score += (num_functions + num_classes * 2) * 5
 
         # コードの長さ（適度な長さを評価）
-        lines = len([l for l in self.code.split('\n') if l.strip()])
+        lines = len([l for l in self.code.split("\n") if l.strip()])
         if 20 <= lines <= 50:
             score += 10
 
@@ -213,12 +382,12 @@ class Individual:
 
     def extract_functions(self):
         """コードから関数を抽出"""
-        pattern = r'(def \w+\([^)]*\):(?:\n    .*)*)'
+        pattern = r"(def \w+\([^)]*\):(?:\n    .*)*)"
         return re.findall(pattern, self.code, re.MULTILINE)
 
     def extract_classes(self):
         """コードから関数を抽出"""
-        pattern = r'(class \w+:(?:\n    .*)*?)(?=\n(?:def |class |\Z))'
+        pattern = r"(class \w+:(?:\n    .*)*?)(?=\n(?:def |class |\Z))"
         return re.findall(pattern, self.code, re.MULTILINE)
 
 
@@ -262,15 +431,15 @@ def crossover(parent1, parent2):
 def mutate(individual, mutation_rate=0.2):
     """突然変異：コードをランダムに変更"""
     if random.random() < mutation_rate:
-        mutation_type = random.choice(['add_function', 'add_class', 'modify'])
+        mutation_type = random.choice(["add_function", "add_class", "modify"])
 
-        if mutation_type == 'add_function':
+        if mutation_type == "add_function":
             # 新しい関数を追加
             individual.code += "\n" + generate_random_function()
-        elif mutation_type == 'add_class':
+        elif mutation_type == "add_class":
             # 新しいクラスを追加
             individual.code += "\n" + generate_random_class()
-        elif mutation_type == 'modify':
+        elif mutation_type == "modify":
             # 既存の関数の一部を置き換え
             funcs = individual.extract_functions()
             if funcs:
@@ -279,11 +448,13 @@ def mutate(individual, mutation_rate=0.2):
                 individual.code = individual.code.replace(old_func, new_func, 1)
 
 
-def genetic_algorithm(population_size=10, generations=5):
+def genetic_algorithm(population_size=10, generations=5, use_llm=False):
     """遺伝的アルゴリズムでコードを進化"""
     print("=" * 60)
     print("遺伝的アルゴリズムを開始します")
     print(f"個体数: {population_size}, 世代数: {generations}")
+    if use_llm:
+        print("LLM改善: 有効")
     print("=" * 60)
 
     # 初期個体群を生成
@@ -306,7 +477,7 @@ def genetic_algorithm(population_size=10, generations=5):
         print(f"最高適応度: {best_fitness:.2f}")
         print(f"平均適応度: {avg_fitness:.2f}")
         print(f"最良個体のコード（最初の5行）:")
-        print('\n'.join(population[0].code.split('\n')[:5]))
+        print("\n".join(population[0].code.split("\n")[:5]))
 
         # 最終世代でなければ次世代を生成
         if generation < generations - 1:
@@ -330,16 +501,50 @@ def genetic_algorithm(population_size=10, generations=5):
     print("=" * 60)
     print(population[0].code)
 
+    # LLMで改善する場合
+    if use_llm:
+        original_code = population[0].code
+        improved_code = improve_code_with_llm(original_code)
+        population[0].code = improved_code
+
+        # 改善されたコードを評価
+        evaluate_code_with_llm(original_code, improved_code)
+
     return population[0]
 
 
 def main():
-    mode = input("モードを選択してください (1: 通常, 2: 遺伝的アルゴリズム): ")
+    mode = input(
+        "モードを選択してください (1: 通常, 2: 遺伝的アルゴリズム, 3: LLM改善, 4: 遺伝的アルゴリズム+LLM): "
+    )
 
     if mode == "2":
-        best_individual = genetic_algorithm(population_size=10, generations=5)
+        best_individual = genetic_algorithm(
+            population_size=10, generations=5, use_llm=False
+        )
         print("\n最良個体を実行します:\n")
         execute_generated_code(best_individual.code)
+    elif mode == "4":
+        best_individual = genetic_algorithm(
+            population_size=10, generations=5, use_llm=True
+        )
+        print("\n最良個体（LLM改善済み）を実行します:\n")
+        execute_generated_code(best_individual.code)
+    elif mode == "3":
+        print("偶発的なコードを生成します...\n")
+        generated_code = generate_code()
+        print("生成されたコード:")
+        print(generated_code)
+        print("\n")
+
+        # LLMで改善
+        improved_code = improve_code_with_llm(generated_code)
+
+        # 改善されたコードを評価
+        evaluate_code_with_llm(generated_code, improved_code)
+
+        # 改善されたコードを実行
+        execute_generated_code(improved_code)
     else:
         print("偶発的なコードを生成します...\n")
         generated_code = generate_code()
