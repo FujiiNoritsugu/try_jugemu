@@ -3,6 +3,7 @@ import string
 import time
 import re
 import os
+import math
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
@@ -230,7 +231,26 @@ def improve_code_with_llm(code):
 1. 元のコードの構造（関数名、クラス名）をできるだけ活かす
 2. 実際に役立つ機能を持つコードにする
 3. コメントやdocstringを充実させる
-4. エラーが出ないようにする
+4. **絶対にエラーが出ないようにする**
+
+重要な制約:
+- **未定義の変数や関数を絶対に使用しないこと**
+- **外部ライブラリをインポートしないこと（標準ライブラリのみ使用可）**
+- **すべての関数とクラスは定義後に必ず呼び出すこと**
+- **定義した関数やクラスのメソッドは、パラメータなしで呼び出せるようにデフォルト引数を設定すること**
+- **コード内で未定義のグローバル変数を参照しないこと**
+- **インデントエラーや構文エラーが発生しないようにすること**
+
+実行例:
+```python
+# 正しい例
+def greet(name="World"):
+    return f"Hello, {{name}}!"
+
+# 関数を呼び出す
+result = greet()
+print(result)
+```
 
 以下の形式で出力してください：
 
@@ -239,7 +259,7 @@ def improve_code_with_llm(code):
 
 ## 改善されたコード
 ```python
-[改善されたPythonコード]
+[改善されたPythonコード（必ず実行可能で、エラーが出ないこと）]
 ```"""
 
         message = client.messages.create(
@@ -254,19 +274,45 @@ def improve_code_with_llm(code):
         improvements = ""
         improved_code = ""
 
+        # 正規表現でコードブロックを抽出
+        code_block_pattern = r"```python\s*(.*?)\s*```"
+        code_blocks = re.findall(code_block_pattern, response_text, re.DOTALL)
+
+        if code_blocks:
+            # 最後のコードブロックを取得（通常は「改善されたコード」のブロック）
+            improved_code = code_blocks[-1].strip()
+        else:
+            # コードブロックが見つからない場合、## 改善されたコード 以降を取得
+            if "## 改善されたコード" in response_text:
+                parts = response_text.split("## 改善されたコード")
+                code_part = parts[1].strip()
+                # 単純にマーカーを削除
+                improved_code = (
+                    code_part.replace("```python", "")
+                    .replace("```", "")
+                    .strip()
+                )
+            else:
+                # それでもダメなら全体からマーカーを削除
+                improved_code = (
+                    response_text.replace("```python", "")
+                    .replace("```", "")
+                    .strip()
+                )
+
+        # 改善点を抽出
         if "## 改善点" in response_text and "## 改善されたコード" in response_text:
             parts = response_text.split("## 改善されたコード")
             improvements = parts[0].replace("## 改善点", "").strip()
-            code_part = parts[1].strip()
-            # コードブロックのマーカーを削除
-            improved_code = (
-                code_part.replace("```python", "").replace("```", "").strip()
-            )
-        else:
-            # フォーマットが期待通りでない場合は全体をコードとして扱う
-            improved_code = (
-                response_text.replace("```python", "").replace("```", "").strip()
-            )
+
+        # コードが空または短すぎる場合のチェック
+        if not improved_code or len(improved_code) < 10:
+            print("\n⚠️  LLMのレスポンスからコードを抽出できませんでした")
+            print("\n=== LLMの生のレスポンス ===")
+            print(response_text)
+            print("=" * 60)
+            print("\n元のコードを返します")
+            return code
 
         # 改善点を表示
         if improvements:
@@ -280,6 +326,23 @@ def improve_code_with_llm(code):
         print(improved_code)
         print("\n" + "=" * 60)
 
+        # 改善されたコードの構文をチェック
+        is_valid, error_msg = validate_code_syntax(improved_code)
+        if not is_valid:
+            print(f"\n⚠️  改善されたコードに構文エラーがあります: {error_msg}")
+            print("\n=== デバッグ情報: 抽出されたコードの最初の10行 ===")
+            for i, line in enumerate(improved_code.split("\n")[:10], 1):
+                print(f"{i:3d}: {line}")
+            print("=" * 60)
+            print("\n=== LLMの生のレスポンス（最初の500文字） ===")
+            print(response_text[:500])
+            print("..." if len(response_text) > 500 else "")
+            print("=" * 60)
+            print("\n元のコードを返します")
+            return code
+        else:
+            print("\n✅ 改善されたコードの構文チェックが完了しました")
+
         return improved_code
 
     except Exception as e:
@@ -288,11 +351,35 @@ def improve_code_with_llm(code):
         return code
 
 
-def execute_generated_code(code, max_retries=5):
+def validate_code_syntax(code):
+    """コードの構文を検証"""
+    try:
+        compile(code, "<string>", "exec")
+        return True, None
+    except SyntaxError as e:
+        return False, f"行{e.lineno}: {e.msg}"
+    except Exception as e:
+        return False, str(e)
+
+
+def execute_generated_code(code, max_retries=5, show_traceback=True):
     """生成されたコードを実行（エラー時は修正して再実行）"""
     print("=" * 60)
     print("生成されたコードを実行します...")
     print("=" * 60)
+
+    # 事前に構文チェック
+    is_valid, error_msg = validate_code_syntax(code)
+    if not is_valid:
+        print(f"⚠️  構文エラーが検出されました: {error_msg}")
+        print("構文エラーを修正します...")
+        code = fix_syntax_error(code)
+        is_valid, error_msg = validate_code_syntax(code)
+        if not is_valid:
+            print(f"❌ 構文エラーの修正に失敗しました: {error_msg}")
+            print("\n問題のコード:")
+            print(code)
+            return False
 
     current_code = code
     retry_count = 0
@@ -301,12 +388,16 @@ def execute_generated_code(code, max_retries=5):
         try:
             exec(current_code)
             print("\n" + "=" * 60)
-            print("実行完了")
+            print("✅ 実行完了")
             print("=" * 60)
             return True
         except ZeroDivisionError as e:
             retry_count += 1
             print(f"\n[エラー {retry_count}/{max_retries}] ゼロ除算エラー: {e}")
+            if show_traceback:
+                import traceback
+                print("詳細なエラー情報:")
+                traceback.print_exc()
             print("コードを修正して再実行します...")
             current_code = fix_division_by_zero(current_code)
             print("\n修正後のコード:")
@@ -315,28 +406,57 @@ def execute_generated_code(code, max_retries=5):
         except SyntaxError as e:
             retry_count += 1
             print(f"\n[エラー {retry_count}/{max_retries}] 構文エラー: {e}")
+            if show_traceback:
+                import traceback
+                print("詳細なエラー情報:")
+                traceback.print_exc()
             print("コードを修正して再実行します...")
             current_code = fix_syntax_error(current_code)
             print("\n修正後のコード:")
             print(current_code)
             print("\n")
-        except Exception as e:
+        except NameError as e:
             retry_count += 1
-            print(
-                f"\n[エラー {retry_count}/{max_retries}] 実行エラー: {type(e).__name__}: {e}"
-            )
+            print(f"\n[エラー {retry_count}/{max_retries}] 名前エラー（未定義の変数/関数）: {e}")
+            if show_traceback:
+                import traceback
+                print("詳細なエラー情報:")
+                traceback.print_exc()
+            print("LLMが生成したコードに未定義の変数や関数が含まれている可能性があります")
+            print("\n問題のコード:")
+            print(current_code)
             if retry_count < max_retries:
-                print("別のコードを生成して再試行します...")
+                print("\n別のコードを生成して再試行します...")
                 current_code = generate_code()
                 print("\n新しく生成されたコード:")
                 print(current_code)
                 print("\n")
             else:
-                print("最大再試行回数に達しました。")
+                print("❌ 最大再試行回数に達しました。")
+                return False
+        except Exception as e:
+            retry_count += 1
+            print(
+                f"\n[エラー {retry_count}/{max_retries}] 実行エラー: {type(e).__name__}: {e}"
+            )
+            if show_traceback:
+                import traceback
+                print("詳細なエラー情報:")
+                traceback.print_exc()
+            print("\n問題のコード:")
+            print(current_code)
+            if retry_count < max_retries:
+                print("\n別のコードを生成して再試行します...")
+                current_code = generate_code()
+                print("\n新しく生成されたコード:")
+                print(current_code)
+                print("\n")
+            else:
+                print("❌ 最大再試行回数に達しました。")
                 return False
 
     print("\n" + "=" * 60)
-    print("最大再試行回数に達しましたが、エラーが解決しませんでした。")
+    print("❌ 最大再試行回数に達しましたが、エラーが解決しませんでした。")
     print("=" * 60)
     return False
 
@@ -513,9 +633,103 @@ def genetic_algorithm(population_size=10, generations=5, use_llm=False):
     return population[0]
 
 
+def simulated_annealing(
+    initial_temp=100.0, cooling_rate=0.95, min_temp=0.1, use_llm=False
+):
+    """シミュレーテッドアニーリングでコードを最適化"""
+    print("=" * 60)
+    print("シミュレーテッドアニーリングを開始します")
+    print(f"初期温度: {initial_temp}, 冷却率: {cooling_rate}, 最低温度: {min_temp}")
+    if use_llm:
+        print("LLM改善: 有効")
+    print("=" * 60)
+
+    # 初期解を生成
+    current_individual = Individual()
+    current_individual.evaluate_fitness()
+    best_individual = Individual(current_individual.code)
+    best_individual.fitness = current_individual.fitness
+
+    temperature = initial_temp
+    iteration = 0
+
+    print(f"\n初期解の適応度: {current_individual.fitness:.2f}")
+    print(f"初期コード（最初の5行）:")
+    print("\n".join(current_individual.code.split("\n")[:5]))
+
+    # 温度が最低温度に達するまで繰り返し
+    while temperature > min_temp:
+        iteration += 1
+
+        # 新しい解を生成（突然変異）
+        new_individual = Individual(current_individual.code)
+        mutate(new_individual, mutation_rate=0.3)  # 突然変異率を少し高めに設定
+        new_individual.evaluate_fitness()
+
+        # 適応度の差分を計算
+        delta = new_individual.fitness - current_individual.fitness
+
+        # メトロポリス基準で受理判定
+        if delta > 0:
+            # 改善した場合は必ず受理
+            current_individual = new_individual
+            accept_reason = "改善"
+        else:
+            # 悪化した場合は確率的に受理
+            acceptance_probability = math.exp(delta / temperature)
+            if random.random() < acceptance_probability:
+                current_individual = new_individual
+                accept_reason = f"確率的受理 (p={acceptance_probability:.4f})"
+            else:
+                accept_reason = None
+
+        # 最良解を更新
+        if current_individual.fitness > best_individual.fitness:
+            best_individual = Individual(current_individual.code)
+            best_individual.fitness = current_individual.fitness
+            print(
+                f"\n[反復 {iteration}] 🌟 最良解更新! 適応度: {best_individual.fitness:.2f}, 温度: {temperature:.2f}"
+            )
+
+        # 10回ごとに進捗を表示
+        if iteration % 10 == 0:
+            if accept_reason:
+                print(
+                    f"[反復 {iteration}] 温度: {temperature:.2f}, 現在: {current_individual.fitness:.2f}, "
+                    f"最良: {best_individual.fitness:.2f}, 状態: {accept_reason}"
+                )
+            else:
+                print(
+                    f"[反復 {iteration}] 温度: {temperature:.2f}, 現在: {current_individual.fitness:.2f}, "
+                    f"最良: {best_individual.fitness:.2f}, 状態: 棄却"
+                )
+
+        # 温度を下げる
+        temperature *= cooling_rate
+
+    print("\n" + "=" * 60)
+    print(f"最適化完了！総反復回数: {iteration}")
+    print(f"最良解の適応度: {best_individual.fitness:.2f}")
+    print("=" * 60)
+    print("最良解のコード:")
+    print("=" * 60)
+    print(best_individual.code)
+
+    # LLMで改善する場合
+    if use_llm:
+        original_code = best_individual.code
+        improved_code = improve_code_with_llm(original_code)
+        best_individual.code = improved_code
+
+        # 改善されたコードを評価
+        evaluate_code_with_llm(original_code, improved_code)
+
+    return best_individual
+
+
 def main():
     mode = input(
-        "モードを選択してください (1: 通常, 2: 遺伝的アルゴリズム, 3: LLM改善, 4: 遺伝的アルゴリズム+LLM): "
+        "モードを選択してください (1: 通常, 2: 遺伝的アルゴリズム, 3: LLM改善, 4: 遺伝的アルゴリズム+LLM, 5: シミュレーテッドアニーリング, 6: シミュレーテッドアニーリング+LLM): "
     )
 
     if mode == "2":
@@ -523,13 +737,26 @@ def main():
             population_size=10, generations=5, use_llm=False
         )
         print("\n最良個体を実行します:\n")
-        execute_generated_code(best_individual.code)
+        execute_generated_code(best_individual.code, max_retries=10)
     elif mode == "4":
         best_individual = genetic_algorithm(
             population_size=10, generations=5, use_llm=True
         )
         print("\n最良個体（LLM改善済み）を実行します:\n")
-        execute_generated_code(best_individual.code)
+        execute_generated_code(best_individual.code, max_retries=10)
+    elif mode == "5":
+        best_individual = simulated_annealing(
+            initial_temp=100.0, cooling_rate=0.95, min_temp=0.1, use_llm=False
+        )
+        print("\n最良個体を実行します:\n")
+        execute_generated_code(best_individual.code, max_retries=10)
+    elif mode == "6":
+        best_individual = simulated_annealing(
+            initial_temp=100.0, cooling_rate=0.95, min_temp=0.1, use_llm=True
+        )
+        print("\n最良個体（LLM改善済み）を実行します:\n")
+        # LLMで改善されたコードは再試行を増やす
+        execute_generated_code(best_individual.code, max_retries=10)
     elif mode == "3":
         print("偶発的なコードを生成します...\n")
         generated_code = generate_code()
@@ -544,7 +771,7 @@ def main():
         evaluate_code_with_llm(generated_code, improved_code)
 
         # 改善されたコードを実行
-        execute_generated_code(improved_code)
+        execute_generated_code(improved_code, max_retries=10)
     else:
         print("偶発的なコードを生成します...\n")
         generated_code = generate_code()
