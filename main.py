@@ -39,14 +39,79 @@ def generate_random_value():
         return f'[{", ".join(str(random.randint(0, 100)) for _ in range(random.randint(1, 5)))}]'
 
 
+# テキスト生成用のデータ
+TEXT_PARTS = {
+    "subjects": ["猫", "犬", "鳥", "太郎", "花子", "システム", "プログラム"],
+    "verbs": ["走る", "飛ぶ", "歌う", "考える", "作る", "見る", "聞く"],
+    "adjectives": ["美しい", "速い", "賢い", "静かな", "大きな", "小さな", "新しい"],
+    "objects": ["本", "音楽", "絵", "物語", "データ", "情報", "メッセージ"],
+    "greetings": ["こんにちは", "おはよう", "こんばんは", "ようこそ"],
+    "farewells": ["さようなら", "またね", "お疲れ様", "ありがとう"],
+}
+
+
+def generate_human_readable_text():
+    """人が読める意味のあるテキストを生成"""
+    text_templates = [
+        "こんにちは、世界！",
+        "プログラムを実行中です",
+        "処理が完了しました",
+        "データを読み込んでいます",
+        "計算結果: {}".format(random.randint(1, 100)),
+        "ようこそ、{}さん".format(random.choice(["太郎", "花子", "ユーザー"])),
+        "今日は良い天気ですね",
+        "システムは正常に動作しています",
+        "ファイルを保存しました",
+        "エラーはありません",
+        "処理中: {}%".format(random.randint(0, 100)),
+        "タスクが開始されました",
+        "{}個のアイテムが見つかりました".format(random.randint(1, 50)),
+        "お疲れ様でした！",
+        "次のステップに進みます",
+    ]
+    return f'"{random.choice(text_templates)}"'
+
+
+def generate_text_generation_operation():
+    """テキスト生成に特化した操作を生成（単一行として返す）"""
+    text_ops = [
+        # 文字列リストの結合
+        lambda: 'print("生成されたテキスト: " + "".join(["猫", "が", "走る"]))',
+        lambda: 'print("生成されたテキスト: " + "".join(["太郎", "は", "本", "を", "読む"]))',
+        lambda: 'print("生成されたテキスト: " + "".join(["美しい", "花", "が", "咲く"]))',
+
+        # テンプレート文字列の生成
+        lambda: f'print("{random.choice(["猫", "犬", "太郎", "花子"])}が{random.choice(["走る", "歌う", "考える", "笑う"])}")',
+
+        # 数値から文章を生成
+        lambda: f'print(f"{random.randint(1, 10)}個のアイテムが見つかりました")',
+
+        # 条件に応じたメッセージ生成
+        lambda: f'print(f"値: {random.randint(1, 100)}, " + ("大きい値です" if {random.randint(1, 100)} > 50 else "小さい値です"))',
+
+        # 挨拶と名前の組み合わせ
+        lambda: f'print(f"{random.choice(["こんにちは", "おはよう", "こんばんは"])}、{random.choice(["太郎", "花子", "ユーザー"])}さん！")',
+
+        # 単純な人が読めるメッセージ
+        lambda: 'print("こんにちは、世界、今日は良い天気です")',
+        lambda: 'print("昔々あるところに猫がいました")',
+        lambda: 'print("昔々あるところに太郎がいました")',
+        lambda: 'print("昔々あるところに小さな村がありました")',
+    ]
+    return random.choice(text_ops)()
+
+
 def generate_random_operation():
-    """ランダムな操作を生成"""
+    """ランダムな操作を生成（テキスト生成を最優先）"""
     operations = [
+        lambda: generate_text_generation_operation(),  # テキスト生成操作（最優先）
+        lambda: generate_text_generation_operation(),  # 確率を上げるため2回
+        lambda: generate_text_generation_operation(),  # 確率を上げるため3回
+        lambda: f"print({generate_human_readable_text()})",  # 人が読めるテキスト
+        lambda: f"print({generate_human_readable_text()})",  # 確率を上げるため2回
         lambda: f"print({generate_random_value()})",
         lambda: f"{generate_random_identifier()} = {generate_random_value()}",
         lambda: f"result = {random.randint(1, 100)} {random.choice(['+', '-', '*', '//', '%'])} {random.randint(1, 100)}",
-        lambda: f"if {random.choice(['True', 'False'])}:\n        pass",
-        lambda: f"for i in range({random.randint(1, 10)}):\n        pass",
     ]
     return random.choice(operations)()
 
@@ -90,11 +155,67 @@ def generate_code(num_functions=3, num_classes=2):
     """偶発的なコードを生成"""
     code = "# 偶発的に生成されたコード\n\n"
 
+    # 関数名を記録
+    function_names = []
     for _ in range(num_functions):
-        code += generate_random_function() + "\n\n"
+        func_name = generate_random_identifier()
+        num_params = random.randint(0, 3)
+        params = [generate_random_identifier(6) for _ in range(num_params)]
 
+        func_code = f"def {func_name}({', '.join(params)}):\n"
+        func_code += f'    """偶発的に生成された関数"""\n'
+        num_statements = random.randint(1, 5)
+        for _ in range(num_statements):
+            func_code += f"    {generate_random_operation()}\n"
+        func_code += f"    return {generate_random_value()}\n"
+
+        code += func_code + "\n\n"
+        function_names.append((func_name, num_params))
+
+    # クラス名を記録
+    class_names = []
     for _ in range(num_classes):
-        code += generate_random_class() + "\n"
+        class_name = generate_random_identifier().capitalize()
+        class_code = f"class {class_name}:\n"
+        class_code += f'    """偶発的に生成されたクラス"""\n'
+
+        num_methods = random.randint(1, 3)
+        for _ in range(num_methods):
+            method_name = generate_random_identifier()
+            class_code += f"    def {method_name}(self):\n"
+            num_statements = random.randint(1, 3)
+            for _ in range(num_statements):
+                class_code += f"        {generate_random_operation()}\n"
+            class_code += f"        return {generate_random_value()}\n\n"
+
+        code += class_code + "\n"
+        class_names.append(class_name)
+
+    # メインコード：関数とクラスを実際に呼び出す
+    code += "# メイン処理：生成された関数とクラスを実行\n"
+    code += 'print("=" * 40)\n'
+    code += 'print("プログラムを開始します")\n'
+    code += 'print("=" * 40)\n\n'
+
+    # 関数を呼び出す
+    for func_name, num_params in function_names:
+        # パラメータにはデフォルト値を渡す
+        args = ", ".join([str(random.randint(1, 10)) for _ in range(num_params)])
+        code += f'print("関数 {func_name} を実行中...")\n'
+        code += f"result = {func_name}({args})\n"
+        code += f'print(f"結果: {{result}}")\n'
+        code += 'print()\n'
+
+    # クラスを呼び出す
+    for class_name in class_names:
+        code += f'print("クラス {class_name} をインスタンス化...")\n'
+        code += f"obj = {class_name}()\n"
+        code += 'print("処理完了")\n'
+        code += 'print()\n'
+
+    code += 'print("=" * 40)\n'
+    code += 'print("すべての処理が完了しました！")\n'
+    code += 'print("=" * 40)\n'
 
     return code
 
@@ -238,6 +359,8 @@ def improve_code_with_llm(code):
 2. 実際に役立つ機能を持つコードにする
 3. コメントやdocstringを充実させる
 4. **絶対にエラーが出ないようにする**
+5. 🎯 **人が読める意味のあるテキストを出力すること**（重要！）
+6. 🎯 **元のコードにメイン処理（関数やクラスの呼び出し）がある場合、それを必ず残すこと**（重要！）
 
 重要な制約:
 - **未定義の変数や関数を絶対に使用しないこと**
@@ -246,16 +369,23 @@ def improve_code_with_llm(code):
 - **定義した関数やクラスのメソッドは、パラメータなしで呼び出せるようにデフォルト引数を設定すること**
 - **コード内で未定義のグローバル変数を参照しないこと**
 - **インデントエラーや構文エラーが発生しないようにすること**
+- **元のコードにある「# メイン処理」セクションは削除せず、改善して残すこと**
+
+テキスト出力の要件:
+- 🎯 **可能な限りprint()文を使って、人間が読める日本語または英語のメッセージを出力すること**
+- 例: "処理を開始します"、"計算結果: 42"、"タスクが完了しました"など
+- 無意味な数値や変数名だけでなく、文脈のあるメッセージを出力する
 
 実行例:
 ```python
 # 正しい例
 def greet(name="World"):
+    print(f"こんにちは、{{name}}さん！")
     return f"Hello, {{name}}!"
 
 # 関数を呼び出す
 result = greet()
-print(result)
+print(f"結果: {{result}}")
 ```
 
 以下の形式で出力してください：
@@ -373,6 +503,13 @@ def execute_generated_code(code, max_retries=5, show_traceback=True):
     print("=" * 60)
     print("生成されたコードを実行します...")
     print("=" * 60)
+
+    # デバッグ: コード全体を表示
+    print("\n【実行するコード】")
+    print("-" * 60)
+    print(code)
+    print("-" * 60)
+    print("\n【実行結果】")
 
     # 事前に構文チェック
     is_valid, error_msg = validate_code_syntax(code)
@@ -502,6 +639,34 @@ class Individual:
         lines = len([l for l in self.code.split("\n") if l.strip()])
         if 20 <= lines <= 50:
             score += 10
+
+        # 【新規】人が読めるテキスト出力の評価
+        human_readable_keywords = [
+            "こんにちは", "ようこそ", "完了", "実行中", "処理", "データ",
+            "結果", "システム", "お疲れ様", "ファイル", "タスク", "アイテム",
+            "Hello", "Welcome", "Complete", "Processing", "Result", "System",
+            "猫", "犬", "太郎", "花子", "物語", "昔々", "メッセージ"
+        ]
+        human_readable_count = sum(1 for keyword in human_readable_keywords if keyword in self.code)
+        score += human_readable_count * 15  # 人が読めるテキストがあれば1つにつき15点
+
+        # print文の数をカウント（テキスト出力を促進）
+        print_count = self.code.count("print(")
+        score += min(print_count * 5, 25)  # print文があれば加点（最大25点）
+
+        # 【重要】テキスト生成操作を高く評価
+        text_generation_patterns = [
+            '.join(',      # リスト結合
+            'f"',          # f-string（テンプレート文字列）
+            '.append(',    # リストに追加
+            ' + "',        # 文字列結合
+            'message',     # メッセージ変数
+            'text',        # テキスト変数
+            'sentence',    # 文章変数
+            'story',       # ストーリー変数
+        ]
+        text_gen_count = sum(1 for pattern in text_generation_patterns if pattern in self.code)
+        score += text_gen_count * 20  # テキスト生成パターンがあれば1つにつき20点
 
         self.fitness = score
         return score
@@ -1303,6 +1468,42 @@ def hybrid_optimization(use_llm=False):
     if use_llm:
         original_code = best_individual_ql.code
         improved_code = improve_code_with_llm(original_code)
+
+        # メイン処理が欠落している場合は追加
+        if "# メイン処理" not in improved_code:
+            print("\n⚠️  LLM改善後にメイン処理が欠落していたため、追加します")
+            # 関数とクラスを抽出
+            import re
+            functions = re.findall(r'def\s+(\w+)\s*\(([^)]*)\)', improved_code)
+            classes = re.findall(r'class\s+(\w+)\s*:', improved_code)
+
+            main_code = '\n\n# メイン処理：生成された関数とクラスを実行\n'
+            main_code += 'print("=" * 40)\n'
+            main_code += 'print("プログラムを開始します")\n'
+            main_code += 'print("=" * 40)\n\n'
+
+            # 関数を呼び出す
+            for func_name, params in functions:
+                param_list = [p.strip() for p in params.split(',') if p.strip()]
+                args = ", ".join(["1" for _ in param_list])  # 簡単なデフォルト値
+                main_code += f'print("関数 {func_name} を実行中...")\n'
+                main_code += f'result = {func_name}({args})\n'
+                main_code += f'print(f"結果: {{result}}")\n'
+                main_code += 'print()\n'
+
+            # クラスを呼び出す
+            for class_name in classes:
+                main_code += f'print("クラス {class_name} をインスタンス化...")\n'
+                main_code += f'obj = {class_name}()\n'
+                main_code += 'print("処理完了")\n'
+                main_code += 'print()\n'
+
+            main_code += 'print("=" * 40)\n'
+            main_code += 'print("すべての処理が完了しました！")\n'
+            main_code += 'print("=" * 40)\n'
+
+            improved_code += main_code
+
         best_individual_ql.code = improved_code
 
         # 改善されたコードを評価
@@ -1370,8 +1571,18 @@ def main():
         print("\n最良個体を実行します:\n")
         execute_generated_code(best_individual.code, max_retries=10)
     elif mode == "10":
+        print("\n" + "=" * 60)
+        print("ハイブリッド最適化+LLM改善を開始します")
+        print("=" * 60)
         best_individual = hybrid_optimization(use_llm=True)
-        print("\n最良個体（LLM改善済み）を実行します:\n")
+        print("\n" + "=" * 60)
+        print("最良個体（LLM改善済み）を実行します")
+        print("=" * 60)
+        print("\n改善されたコードの最初の10行:")
+        print("-" * 60)
+        print("\n".join(best_individual.code.split("\n")[:10]))
+        print("-" * 60)
+        print("\n実行開始...\n")
         execute_generated_code(best_individual.code, max_retries=10)
     elif mode == "11":
         # 保存されたコードをロードして実行
