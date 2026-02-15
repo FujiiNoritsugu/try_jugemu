@@ -49,6 +49,47 @@ TEXT_PARTS = {
     "farewells": ["さようなら", "またね", "お疲れ様", "ありがとう"],
 }
 
+# 物語生成用のデータ構造
+STORY_ELEMENTS = {
+    "characters": [
+        {"name": "太郎", "trait": "勇敢な"},
+        {"name": "花子", "trait": "賢い"},
+        {"name": "猫のミケ", "trait": "不思議な"},
+        {"name": "老人", "trait": "謎の"},
+        {"name": "王子", "trait": "高貴な"},
+        {"name": "魔法使い", "trait": "強力な"},
+    ],
+    "locations": ["森", "村", "城", "海辺", "山の頂", "古い屋敷", "洞窟", "魔法の庭"],
+    "times": ["ある朝", "夕暮れ時", "真夜中", "春の日", "嵐の夜", "満月の晩"],
+    "events": ["出会った", "発見した", "挑戦した", "救った", "旅立った", "戦った"],
+    "objects": ["宝物", "地図", "魔法の石", "古い本", "不思議な鍵", "伝説の剣"],
+    "emotions": ["喜んだ", "驚いた", "悲しんだ", "決心した", "感動した", "恐れた"],
+
+    # 物語の展開パターン（起承転結）
+    "story_arc": {
+        "introduction": [  # 起
+            "{time}、{location}に{character}がいた。",
+            "{character}は{trait}冒険者だった。",
+            "昔々、{location}で{character}が暮らしていた。",
+        ],
+        "development": [  # 承
+            "そこで{character}は{object}を{event}。",
+            "{location}で不思議なことが起こった。",
+            "{character}は{object}を求めて旅に出た。",
+        ],
+        "twist": [  # 転
+            "しかし、突然{event}。",
+            "予想外の展開に{character}は{emotion}。",
+            "その時、{location}で大変なことが起きた。",
+        ],
+        "conclusion": [  # 結
+            "ついに{character}は目的を達成した。",
+            "こうして物語は幕を閉じた。",
+            "{character}は{emotion}、平和が訪れた。",
+        ]
+    }
+}
+
 
 def generate_human_readable_text():
     """人が読める意味のあるテキストを生成"""
@@ -72,30 +113,107 @@ def generate_human_readable_text():
     return f'"{random.choice(text_templates)}"'
 
 
+def generate_story_text():
+    """物語性のあるテキストを生成（単文）"""
+    # ランダムにストーリー要素を選択
+    character = random.choice(STORY_ELEMENTS["characters"])
+    location = random.choice(STORY_ELEMENTS["locations"])
+    time = random.choice(STORY_ELEMENTS["times"])
+    event = random.choice(STORY_ELEMENTS["events"])
+    object_item = random.choice(STORY_ELEMENTS["objects"])
+    emotion = random.choice(STORY_ELEMENTS["emotions"])
+
+    # 起承転結のどれかを選んで文を生成
+    arc_type = random.choice(["introduction", "development", "twist", "conclusion"])
+    template = random.choice(STORY_ELEMENTS["story_arc"][arc_type])
+
+    # テンプレートに要素を埋め込む
+    story = template.format(
+        character=character["name"],
+        trait=character["trait"],
+        location=location,
+        time=time,
+        event=event,
+        object=object_item,
+        emotion=emotion
+    )
+
+    return f'"{story}"'
+
+
+def generate_multi_sentence_story():
+    """複数の文からなる物語を生成"""
+    # ストーリーのコンテキストを保持
+    character = random.choice(STORY_ELEMENTS["characters"])
+    location = random.choice(STORY_ELEMENTS["locations"])
+    object_item = random.choice(STORY_ELEMENTS["objects"])
+
+    # 起承転結の順番で文を生成
+    sentences = []
+
+    # 起
+    intro_template = random.choice(STORY_ELEMENTS["story_arc"]["introduction"])
+    sentences.append(intro_template.format(
+        character=character["name"],
+        trait=character["trait"],
+        location=location,
+        time=random.choice(STORY_ELEMENTS["times"])
+    ))
+
+    # 承
+    dev_template = random.choice(STORY_ELEMENTS["story_arc"]["development"])
+    sentences.append(dev_template.format(
+        character=character["name"],
+        location=location,
+        object=object_item,
+        event=random.choice(STORY_ELEMENTS["events"])
+    ))
+
+    # 転（確率的に追加）
+    if random.random() > 0.5:
+        twist_template = random.choice(STORY_ELEMENTS["story_arc"]["twist"])
+        sentences.append(twist_template.format(
+            character=character["name"],
+            location=location,
+            event=random.choice(STORY_ELEMENTS["events"]),
+            emotion=random.choice(STORY_ELEMENTS["emotions"])
+        ))
+
+    # 結
+    conclusion_template = random.choice(STORY_ELEMENTS["story_arc"]["conclusion"])
+    sentences.append(conclusion_template.format(
+        character=character["name"],
+        emotion=random.choice(STORY_ELEMENTS["emotions"])
+    ))
+
+    return " ".join(sentences)
+
+
 def generate_text_generation_operation():
-    """テキスト生成に特化した操作を生成（単一行として返す）"""
+    """テキスト生成に特化した操作を生成（物語性重視）"""
     text_ops = [
-        # 文字列リストの結合
+        # 物語生成操作（最優先・高確率）
+        lambda: f'print({generate_story_text()})',
+        lambda: f'print({generate_story_text()})',
+        lambda: f'print({generate_story_text()})',
+        lambda: f'print({generate_story_text()})',
+
+        # 複数文の物語生成
+        lambda: f'story = "{generate_multi_sentence_story()}"; print(story)',
+        lambda: f'story = "{generate_multi_sentence_story()}"; print(story)',
+        lambda: f'story = "{generate_multi_sentence_story()}"; print(story)',
+
+        # 連続した物語の展開
+        lambda: 'print("昔々あるところに"); print("そして冒険が始まった"); print("最後に平和が訪れた")',
+        lambda: 'print("物語が始まる"); print("困難に立ち向かう"); print("希望を見つけた")',
+
+        # 物語要素の変数化と組み合わせ
+        lambda: f'character = "{random.choice(STORY_ELEMENTS["characters"])["name"]}"; location = "{random.choice(STORY_ELEMENTS["locations"])}"; print(f"{{character}}は{{location}}にいる")',
+        lambda: f'hero = "{random.choice(STORY_ELEMENTS["characters"])["name"]}"; quest = "{random.choice(STORY_ELEMENTS["objects"])}"; print(f"{{hero}}は{{quest}}を求めて旅に出た")',
+
+        # 既存の操作も残す（確率は低め）
         lambda: 'print("生成されたテキスト: " + "".join(["猫", "が", "走る"]))',
-        lambda: 'print("生成されたテキスト: " + "".join(["太郎", "は", "本", "を", "読む"]))',
-        lambda: 'print("生成されたテキスト: " + "".join(["美しい", "花", "が", "咲く"]))',
-
-        # テンプレート文字列の生成
         lambda: f'print("{random.choice(["猫", "犬", "太郎", "花子"])}が{random.choice(["走る", "歌う", "考える", "笑う"])}")',
-
-        # 数値から文章を生成
-        lambda: f'print(f"{random.randint(1, 10)}個のアイテムが見つかりました")',
-
-        # 条件に応じたメッセージ生成
-        lambda: f'print(f"値: {random.randint(1, 100)}, " + ("大きい値です" if {random.randint(1, 100)} > 50 else "小さい値です"))',
-
-        # 挨拶と名前の組み合わせ
-        lambda: f'print(f"{random.choice(["こんにちは", "おはよう", "こんばんは"])}、{random.choice(["太郎", "花子", "ユーザー"])}さん！")',
-
-        # 単純な人が読めるメッセージ
-        lambda: 'print("こんにちは、世界、今日は良い天気です")',
-        lambda: 'print("昔々あるところに猫がいました")',
-        lambda: 'print("昔々あるところに太郎がいました")',
         lambda: 'print("昔々あるところに小さな村がありました")',
     ]
     return random.choice(text_ops)()
@@ -347,7 +465,7 @@ def improve_code_with_llm(code):
 
         client = Anthropic(api_key=api_key)
 
-        prompt = f"""以下のランダムに生成されたPythonコードを、意味のある実用的なコードに改善してください。
+        prompt = f"""以下のランダムに生成されたPythonコードを、物語性のある実用的なコードに改善してください。
 
 元のコード:
 ```python
@@ -356,11 +474,21 @@ def improve_code_with_llm(code):
 
 要件:
 1. 元のコードの構造（関数名、クラス名）をできるだけ活かす
-2. 実際に役立つ機能を持つコードにする
-3. コメントやdocstringを充実させる
-4. **絶対にエラーが出ないようにする**
-5. 🎯 **人が読める意味のあるテキストを出力すること**（重要！）
-6. 🎯 **元のコードにメイン処理（関数やクラスの呼び出し）がある場合、それを必ず残すこと**（重要！）
+2. **物語性のあるテキストを生成する機能を持たせる**（最重要！）
+3. 起承転結のある物語、または連続したストーリーを出力する
+4. 登場人物、場所、出来事などの要素を組み合わせる
+5. print()文で物語を段階的に展開する
+6. コメントやdocstringを充実させる
+7. **絶対にエラーが出ないようにする**
+8. 🎯 **元のコードにメイン処理（関数やクラスの呼び出し）がある場合、それを必ず残すこと**（重要！）
+
+物語の要素例:
+- 登場人物: 太郎、花子、猫のミケ、老人、王子、魔法使いなど
+- 場所: 森、村、城、海辺、山の頂、古い屋敷、洞窟、魔法の庭など
+- 時間: ある朝、夕暮れ時、真夜中、春の日、嵐の夜、満月の晩など
+- 出来事: 出会った、発見した、挑戦した、救った、旅立った、戦ったなど
+- アイテム: 宝物、地図、魔法の石、古い本、不思議な鍵、伝説の剣など
+- 展開: 昔々→出会い→冒険→困難→解決→結末
 
 重要な制約:
 - **未定義の変数や関数を絶対に使用しないこと**
@@ -371,31 +499,46 @@ def improve_code_with_llm(code):
 - **インデントエラーや構文エラーが発生しないようにすること**
 - **元のコードにある「# メイン処理」セクションは削除せず、改善して残すこと**
 
-テキスト出力の要件:
-- 🎯 **可能な限りprint()文を使って、人間が読める日本語または英語のメッセージを出力すること**
-- 例: "処理を開始します"、"計算結果: 42"、"タスクが完了しました"など
-- 無意味な数値や変数名だけでなく、文脈のあるメッセージを出力する
+物語性のあるテキスト出力の要件:
+- 🎯 **複数のprint()文を連続して使い、起承転結のある物語を展開すること**（最重要！）
+- 🎯 **登場人物や場所などの要素を組み合わせて、文脈のある物語を作ること**
+- 例:
+  - "昔々、森に太郎という少年がいました。"
+  - "ある日、太郎は不思議な猫に出会いました。"
+  - "猫は太郎を秘密の場所へと導きました。"
+  - "そこには古い宝箱がありました。"
+  - "こうして太郎の冒険が始まったのです。"
 
 実行例:
 ```python
-# 正しい例
-def greet(name="World"):
-    print(f"こんにちは、{{name}}さん！")
-    return f"Hello, {{name}}!"
+# 正しい例（物語性重視）
+def tell_adventure_story(hero="太郎"):
+    print(f"昔々、ある村に{{hero}}という少年がいました。")
+    print(f"{{hero}}は勇敢で、冒険を夢見ていました。")
+    print(f"ある日、{{hero}}は森で不思議な猫に出会いました。")
+    print("猫は魔法の石のありかを知っていました。")
+    print(f"{{hero}}と猫は一緒に旅に出ました。")
+    print("そして、ついに伝説の宝物を見つけたのです！")
+    return "物語完了"
 
 # 関数を呼び出す
-result = greet()
+print("=" * 40)
+print("物語が始まります")
+print("=" * 40)
+result = tell_adventure_story()
+print("=" * 40)
 print(f"結果: {{result}}")
+print("=" * 40)
 ```
 
 以下の形式で出力してください：
 
 ## 改善点
-[改善点の箇条書き]
+[改善点の箇条書き - 特に物語性をどう追加したかを説明]
 
 ## 改善されたコード
 ```python
-[改善されたPythonコード（必ず実行可能で、エラーが出ないこと）]
+[物語生成に特化した改善されたPythonコード（必ず実行可能で、エラーが出ないこと）]
 ```"""
 
         message = client.messages.create(
@@ -667,6 +810,43 @@ class Individual:
         ]
         text_gen_count = sum(1 for pattern in text_generation_patterns if pattern in self.code)
         score += text_gen_count * 20  # テキスト生成パターンがあれば1つにつき20点
+
+        # 【新規】物語性の評価
+        story_keywords = [
+            "昔々", "ある", "そして", "しかし", "ついに", "こうして",
+            "物語", "冒険", "旅", "発見", "挑戦", "勇気", "友情",
+            "伝説", "魔法", "英雄", "quest", "hero", "journey"
+        ]
+        story_count = sum(1 for keyword in story_keywords if keyword in self.code)
+        score += story_count * 25  # 物語キーワードがあれば1つにつき25点
+
+        # 連続した文の評価（複数のprint文が近くにあるか）
+        lines = self.code.split("\n")
+        consecutive_prints = 0
+        for i in range(len(lines) - 1):
+            if "print(" in lines[i] and "print(" in lines[i + 1]:
+                consecutive_prints += 1
+        score += consecutive_prints * 30  # 連続したprint文は物語性が高い（1組につき30点）
+
+        # 変数を使った文の構築（f-stringなど）の追加評価
+        if 'f"' in self.code or 'f\'' in self.code:
+            score += 20  # 動的な文生成を評価
+
+        # ストーリー要素の組み合わせ評価
+        story_elements_used = 0
+        # charactersからチェック
+        for char in STORY_ELEMENTS["characters"]:
+            if char["name"] in self.code:
+                story_elements_used += 1
+        # locationsからチェック
+        for loc in STORY_ELEMENTS["locations"]:
+            if loc in self.code:
+                story_elements_used += 1
+        # objectsからチェック
+        for obj in STORY_ELEMENTS["objects"]:
+            if obj in self.code:
+                story_elements_used += 1
+        score += min(story_elements_used * 10, 50)  # 最大50点
 
         self.fitness = score
         return score
